@@ -1,18 +1,16 @@
 {
-  "name": "Partitura – Sheet Music Library",
-  "short_name": "Partitura",
-  "description": "Sheet music library with page turning, cropping, annotations and voice commands.",
-  "id": "./",
-  "start_url": "./",
+  "name": "Metronome",
+  "short_name": "Metronome",
+  "description": "A metronome with a song list, beat accents and tempo presets.",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
-  "background_color": "#15130f",
-  "theme_color": "#15130f",
-  "categories": ["music", "productivity"],
+  "orientation": "portrait",
+  "background_color": "#15171d",
+  "theme_color": "#e8913a",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
   ]
 }
