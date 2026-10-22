@@ -47,7 +47,7 @@ body.edit #editbar{display:flex}
 .item .open span{color:var(--muted);font-size:.8rem}
 .item .open em{font-style:normal;opacity:.85;font-size:.88rem}
 .item .acts{display:flex;gap:4px}
-.item .acts button{background:var(--surface);padding:0 11px;font-size:1.05rem}
+.item .acts button{background:var(--surface);padding:0 11px;font-size:1.05rem;min-width:46px;justify-content:center}
 .item .acts button.on{background:var(--accent);border-color:var(--accent)}
 .note,#empty{color:var(--muted);text-align:center;padding:24px 16px}
 #empty h3{color:var(--text);margin:0 0 6px}
@@ -71,6 +71,8 @@ body.focus:not(.lib) .pn{display:block}
 #exitFit{display:none}
 body.focus #exitFit{display:inline-flex}
 body.lib #bar,body.lib #cropbar,body.lib #cropBtn,body.lib #lightBtn,body.lib #lightbar,body.lib #editBtn,body.lib #saveBtn,body.lib #editbar,body.lib #fit,body.lib #libBtn{display:none}
+/* mic and Audio controls live on the main (library) screen only; hidden, not removed, so their state and settings are untouched */
+body:not(.lib) #mic,body:not(.lib) #setBtn{display:none}
 dialog{background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:14px;width:min(440px,92vw)}
 dialog h3{margin:0 0 6px}
 dialog input[type=text]{width:100%;font:inherit;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);margin-top:8px}
@@ -114,7 +116,6 @@ body.focus #lightbar{display:none}
   <button id="cropBtn" title="Crop margins">✂ Crop</button>
   <button id="lightBtn" title="Brightness and contrast (view only)">☀ Light</button>
   <button id="editBtn" title="Draw circles and add text">✏ Edit</button>
-  <button id="saveBtn" title="Save a copy of this PDF with all your edits">💾 Save</button>
   <button id="fit" title="Hide all controls except Previous / Next (Esc or double-tap to restore)">⤢ Fit</button>
   <button id="mic" title="Voice commands">🎤</button>
   <button id="setBtn" title="Microphone sensitivity, volume and page-turn beep">⚙ Audio</button>
@@ -304,7 +305,9 @@ async function showLibrary(){
       };
       const d=document.createElement('button');d.textContent='🗑';d.title='Delete';d.setAttribute('aria-label','Delete '+m.title);
       d.onclick=async()=>{if(await confirmDel(m.title)){try{await dbDel(m.id)}catch(e){}showLibrary()}};
-      acts.append(pin,ed,d);row.append(o,acts);box.appendChild(row);
+      const sv=document.createElement('button');sv.textContent='💾';sv.title='Save';sv.setAttribute('aria-label','Save: '+m.title);
+      sv.onclick=()=>exportPdf(m,sv);
+      acts.append(sv,pin,ed,d);row.append(o,acts);box.appendChild(row);
     }
   }
   view.replaceChildren(box);view.scrollTop=0;updateNav();
@@ -398,19 +401,33 @@ function updateNav(){
   $('prev').disabled=!pages.length||cur===0;
   $('next').disabled=!pages.length||cur>=pages.length-1;
 }
+/* show() is transactional: the new page is built off-screen, committed in one step, and the
+   page-turn beep plays only AFTER the new page is on screen. If anything fails, cur is rolled back,
+   no beep plays and no cooldown starts. Returns true only for a page that is really displayed. */
 function show(i,silent){
-  if(!pages.length)return;
-  const was=cur;
-  cur=Math.max(0,Math.min(pages.length-1,i));
-  if(beepReady&&!silent&&cur!==was)beep();
+  if(!pages.length)return false;
+  const was=cur,target=Math.max(0,Math.min(pages.length-1,i));
+  const before=[...view.childNodes];
+  try{
+    const w=document.createElement('div');w.id='crop';
+    const el=pages[target].el;
+    const ov=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    ov.id='ov';ov.setAttribute('viewBox','0 0 '+el.width+' '+el.height);ov.dataset.tool=tool;bindOverlay(ov);
+    el.id='page';w.appendChild(el);w.appendChild(ov);
+    cur=target;sel=null;drag=null;
+    view.replaceChildren(w);
+    if(view.firstChild!==w)throw new Error('page was not attached');
+  }catch(err){
+    console.error('Page turn failed',err);
+    cur=was;
+    try{view.replaceChildren(...before)}catch(e){}
+    return false;
+  }
+  for(const step of [renderMarks,layout,()=>{view.scrollTop=0},updateNav]){try{step()}catch(e){console.error(e)}}
+  if(current&&current.page!==cur){current.page=cur;try{saveMeta()}catch(e){}}
+  if(beepReady&&!silent&&cur!==was){try{beep()}catch(e){}}
   beepReady=true;
-  const w=document.createElement('div');w.id='crop';
-  const el=pages[cur].el;el.id='page';w.appendChild(el);
-  const ov=document.createElementNS('http://www.w3.org/2000/svg','svg');
-  ov.id='ov';ov.setAttribute('viewBox','0 0 '+el.width+' '+el.height);ov.dataset.tool=tool;bindOverlay(ov);w.appendChild(ov);
-  sel=null;drag=null;
-  view.replaceChildren(w);renderMarks();layout();view.scrollTop=0;updateNav();
-  if(current&&current.page!==cur){current.page=cur;saveMeta()}
+  return true;
 }
 /* Page-turn gate: every turn request (button, tap, swipe, key, voice) passes through turn().
    A request that arrives while the 250 ms cooldown is running is dropped and discarded,
@@ -422,9 +439,9 @@ function turn(i){
   if(!pages.length)return false;
   const target=Math.max(0,Math.min(pages.length-1,i));
   if(target===cur)return false;
-  show(target);
-  turnLock=performance.now()+COOLDOWN;
-  return true;
+  const ok=show(target);
+  if(ok)turnLock=performance.now()+COOLDOWN;
+  return ok;
 }
 const next=()=>turn(cur+1),prev=()=>turn(cur-1);
 $('next').onclick=next;$('prev').onclick=prev;
@@ -473,7 +490,8 @@ function pageMarks(create){
   return(current.marks&&current.marks[cur])||[];
 }
 const selMark=()=>pageMarks().find(m=>m.id===sel);
-const orderMarks=l=>[...l.filter(x=>x.t==='erase'),...l.filter(x=>x.t!=='erase')];
+const validMark=m=>!!m&&typeof m==='object'&&(m.t==='circle'?isFinite(m.cx)&&isFinite(m.cy)&&isFinite(m.r):m.t==='rect'?isFinite(m.x)&&isFinite(m.y)&&isFinite(m.rw)&&isFinite(m.rh):m.t==='text'?typeof m.text==='string'&&isFinite(m.x)&&isFinite(m.y):m.t==='erase'?(m.k==='brush'?Array.isArray(m.pts)&&m.pts.length>0:m.k==='rect'&&isFinite(m.x)&&isFinite(m.y)&&isFinite(m.rw)&&isFinite(m.rh)):false);
+const orderMarks=l=>{const v=l.filter(validMark);return[...v.filter(x=>x.t==='erase'),...v.filter(x=>x.t!=='erase')]};
 function snap(){hist.push([cur,JSON.stringify(pageMarks())]);if(hist.length>50)hist.shift()}
 function renderMarks(){
   const ov=$('ov');if(!ov||!pages[cur])return;
@@ -774,11 +792,11 @@ async function importLibrary(file){
 $('impFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)importLibrary(f)};
 
 /* ---------- save PDF with all edits (marks + crop) ---------- */
-async function exportPdf(){
-  if(!current||!pages.length)return;
+async function exportPdf(target,btn){
+  if(!target)return;
   if(!window.PDFLib){toast('PDF tools could not load. Check your connection.');return}
   flush();
-  const m=current,btn=$('saveBtn');btn.disabled=true;toast('Preparing PDF…');
+  const m=target;if(btn)btn.disabled=true;toast('Preparing PDF…');
   try{
     const rec=await dbFile(m.id);if(!rec)throw new Error('File not found');
     const {PDFDocument,StandardFonts,rgb,degrees,LineCapStyle}=PDFLib;
@@ -796,7 +814,7 @@ async function exportPdf(){
         if(rot===0){x=X;y=H-Y}else if(rot===90){x=Y;y=X}else if(rot===180){x=W-X;y=Y}else{x=W-Y;y=H-X}
         return[box.x+x,box.y+y];
       };
-      const pm=(m.marks&&m.marks[idx])||[];
+      const pm=((m.marks&&m.marks[idx])||[]).filter(validMark);
       for(const k of [...pm.filter(x=>x.t==='erase'),...pm.filter(x=>x.t!=='erase')]){
         if(k.t==='erase'){
           const white=rgb(1,1,1);
@@ -845,9 +863,9 @@ async function exportPdf(){
   }catch(err){
     if(err&&err.code==='declined')toast('Save cancelled');
     else toast('Could not save: '+((err&&err.message)||'unknown error'));
-  }finally{btn.disabled=false}
+  }finally{if(btn)btn.disabled=false}
 }
-$('saveBtn').onclick=exportPdf;
+
 
 /* ---------- brightness / contrast: a CSS filter on the page layer only (view-only; PDF data is never touched) ---------- */
 let bri=+lsGet('bri',100),con=+lsGet('con',100);
@@ -876,7 +894,8 @@ function audioCtx(){
   if(actx.state==='suspended')actx.resume().catch(()=>{});
   return actx;
 }
-function beep(force){
+function beep(force){try{beepRaw(force)}catch(e){}}
+function beepRaw(force){
   if(!force&&(!beepOn||ovol<=0))return;
   const a=audioCtx();if(!a)return;
   const t=a.currentTime,o=a.createOscillator(),g=a.createGain();

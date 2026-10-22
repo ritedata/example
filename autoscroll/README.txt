@@ -10,7 +10,7 @@ PARTITURA - installable app (PWA)
 
 Files: index.html, manifest.webmanifest, sw.js, icon-192.png, icon-512.png,
 icon-maskable-512.png, apple-touch-icon.png. Keep them together in one folder.
-When you change a file, raise the version number in sw.js (partitura-v9 -> v10).
+When you change a file, raise the version number in sw.js (partitura-v14 -> v15).
 
 BACKUP / SYNC BETWEEN DEVICES
 Library screen > Export library saves one ZIP (library.json + the PDFs).
