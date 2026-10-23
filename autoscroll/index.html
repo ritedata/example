@@ -75,7 +75,7 @@ body.focus:not(.lib) .pn{display:block}
 .pn.br{bottom:calc(var(--barh,52px) + env(safe-area-inset-bottom,0px) + 6px);right:6px}
 #exitFit{display:none}
 body.focus #exitFit{display:inline-flex}
-body.lib #bar,body.lib #cropbar,body.lib #cropBtn,body.lib #lightBtn,body.lib #lightbar,body.lib #editBtn,body.lib #saveBtn,body.lib #editbar,body.lib #fit,body.lib #libBtn{display:none}
+body.lib #bar,body.lib #cropbar,body.lib #cropBtn,body.lib #lightBtn,body.lib #lightbar,body.lib #tempoBtn,body.lib #tempobar,body.lib #editBtn,body.lib #saveBtn,body.lib #editbar,body.lib #fit,body.lib #libBtn{display:none}
 /* mic and Audio controls live on the main (library) screen only; hidden, not removed, so their state and settings are untouched */
 body:not(.lib) #mic,body:not(.lib) #setBtn{display:none}
 dialog{background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:14px;width:min(440px,92vw)}
@@ -107,7 +107,22 @@ body.edit #ov[data-tool=select] .mk.er{pointer-events:auto}
 #lightbar input{flex:1;min-width:0;accent-color:var(--accent)}
 #lightbar output{min-width:42px;text-align:right;color:var(--muted)}
 #lightbar button{grid-column:1/-1;padding:5px 10px}
-body.focus #lightbar{display:none}
+body.focus #lightbar,body.focus #tempobar{display:none}
+#tv{position:absolute;left:0;top:0;pointer-events:none;display:block}
+body.calib #ov{pointer-events:auto;touch-action:none;cursor:crosshair}
+#tempobar{display:none;grid-template-columns:1fr 1fr;gap:6px 14px;align-items:center;padding:8px 14px;border-top:1px solid var(--line);background:var(--surface);font-size:.9rem;max-height:46vh;overflow:auto}
+#tempobar.open{display:grid}
+#tempobar label{display:flex;align-items:center;gap:6px;min-width:0}
+#tempobar input[type=number]{width:76px;font:inherit;padding:6px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+#tempobar input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
+#tempobar .full{grid-column:1/-1}
+#sysList{grid-column:1/-1;display:flex;flex-direction:column;gap:4px}
+.srow2{display:flex;align-items:center;gap:6px;font-size:.85rem}
+.srow2 span{flex:1}
+.srow2 button{padding:3px 9px}
+.trow{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+.trow button{flex:1;padding:7px 6px}
+#tColors{display:flex;gap:6px;align-items:center}
 @media (max-width:480px){header{gap:4px;padding:6px 8px}header button{padding:6px 7px;font-size:.8rem;gap:3px}h1{flex:1 1 90px;min-width:90px}}
 #heard{margin-top:10px;padding:8px 10px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:.85rem;min-height:2.6em}
 </style>
@@ -119,6 +134,7 @@ body.focus #lightbar{display:none}
   <input id="impFile" type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden>
   <button id="cropBtn" title="Crop margins">✂ Crop</button>
   <button id="lightBtn" title="Brightness and contrast (view only)">☀ Light</button>
+  <button id="tempoBtn" title="Visual tempo line: systems, BPM, start / pause">🎯 Tempo</button>
   <button id="editBtn" title="Draw circles and add text">✏ Edit</button>
   <button id="mic" title="Voice commands">🎤</button>
   <button id="setBtn" title="Microphone sensitivity, volume and page-turn beep">⚙ Audio</button>
@@ -126,6 +142,16 @@ body.focus #lightbar{display:none}
 
 <div id="view"></div>
 
+<div id="tempobar">
+  <label>BPM <input id="tBpm" type="number" min="20" max="300" step="0.1" value="100" inputmode="decimal"></label>
+  <label>Beats / measure <input id="tBeats" type="number" min="1" max="16" step="1" value="4" inputmode="numeric"></label>
+  <div id="sysList"></div>
+  <div class="trow"><button id="tCal">✎ Calibrate</button><button id="tPlay" class="primary">▶ Start</button><button id="tReset">⟲ Reset</button><button id="tTap">👆 Tap tempo</button></div>
+  <label>Width <input id="tW" type="range" min="1" max="12" step="1" value="3"></label>
+  <label>Opacity <input id="tO" type="range" min="15" max="100" step="1" value="45"></label>
+  <div class="full" style="display:flex;align-items:center;gap:8px">Colour <span id="tColors"></span></div>
+  <div class="hint full">Keys: P start/pause · T tap · R reset. Voice: “start”, “pause”, “reset”, “tap”.</div>
+</div>
 <div id="lightbar">
   <label>Brightness <input id="bri" type="range" min="30" max="170" step="1" value="100"><output id="briV">100%</output></label>
   <label>Contrast <input id="con" type="range" min="50" max="200" step="1" value="100"><output id="conV">100%</output></label>
@@ -271,8 +297,8 @@ function confirmDel(title){return new Promise(res=>{
 
 /* ---------- library ---------- */
 async function showLibrary(){
-  flush();token++;current=null;pages=[];cur=0;
-  document.body.classList.add('lib');document.body.classList.remove('focus','edit');
+  flush();token++;current=null;pages=[];cur=0;tempoHalt();
+  document.body.classList.add('lib');document.body.classList.remove('focus','edit','calib');
   $('title').textContent='🎼 Partitura';
   let list=[];try{list=await dbList()}catch(e){}
   list.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||a.title.localeCompare(b.title,undefined,{numeric:true,sensitivity:'base'}));
@@ -320,8 +346,8 @@ async function showLibrary(){
 
 async function openDoc(m){
   flush();const my=++token;
-  current=m;pages=[];cur=0;beepReady=false;
-  document.body.classList.remove('lib','edit');hist=[];sel=null;
+  current=m;pages=[];cur=0;beepReady=false;tempoHalt();
+  document.body.classList.remove('lib','edit','calib');hist=[];sel=null;
   $('title').textContent=m.title+(m.author?' — '+m.author:'');
   const c=m.crop||{};cropL=c.l||0;cropR=c.r||0;cropT=c.t||0;cropB=c.b||0;syncCrop(false);
   const msg=document.createElement('p');msg.className='note';msg.textContent='Loading…';view.replaceChildren(msg);updateNav();
@@ -382,7 +408,8 @@ function layout(){
   const s=Math.min(aw/cw,ah/ch);
   w.style.width=(cw*s)+'px';w.style.height=(ch*s)+'px';
   el.style.width=(nw*s)+'px';el.style.height=(nh*s)+'px';el.style.marginLeft=(-l*nw*s)+'px';el.style.marginTop=(-t*nh*s)+'px';
-  const ov=$('ov');if(ov){ov.style.width=(nw*s)+'px';ov.style.height=(nh*s)+'px';ov.style.marginLeft=(-l*nw*s)+'px';ov.style.marginTop=(-t*nh*s)+'px'}
+  for(const id of ['ov','tv']){const o=$(id);if(o){o.style.width=(nw*s)+'px';o.style.height=(nh*s)+'px';o.style.marginLeft=(-l*nw*s)+'px';o.style.marginTop=(-t*nh*s)+'px'}}
+  viewS=s;buildTempo();
 }
 function syncCrop(save=true){
   $('cl').value=cropL;$('cr').value=cropR;$('ct').value=cropT;$('cb').value=cropB;
@@ -418,7 +445,8 @@ function show(i,silent){
     const el=pages[target].el;
     const ov=document.createElementNS('http://www.w3.org/2000/svg','svg');
     ov.id='ov';ov.setAttribute('viewBox','0 0 '+el.width+' '+el.height);ov.dataset.tool=tool;bindOverlay(ov);
-    el.id='page';w.appendChild(el);w.appendChild(ov);
+    el.id='page';w.appendChild(el);w.appendChild(ov);bindCalib(ov);
+    const tv=document.createElementNS('http://www.w3.org/2000/svg','svg');tv.id='tv';tv.setAttribute('viewBox','0 0 '+el.width+' '+el.height);w.appendChild(tv);
     cur=target;sel=null;drag=null;
     view.replaceChildren(w);
     if(view.firstChild!==w)throw new Error('page was not attached');
@@ -428,7 +456,7 @@ function show(i,silent){
     try{view.replaceChildren(...before)}catch(e){}
     return false;
   }
-  for(const step of [renderMarks,layout,()=>{view.scrollTop=0},updateNav]){try{step()}catch(e){console.error(e)}}
+  for(const step of [renderMarks,layout,()=>{view.scrollTop=0},updateNav,()=>tempoOnShow(was)]){try{step()}catch(e){console.error(e)}}
   if(current&&current.page!==cur){current.page=cur;try{saveMeta()}catch(e){}}
   if(beepReady&&!silent&&cur!==was){try{beep()}catch(e){}}
   beepReady=true;
@@ -463,6 +491,11 @@ view.addEventListener('dblclick',e=>{
 document.addEventListener('keydown',e=>{
   if(document.querySelector('dialog[open]')||e.target.type==='text'||e.target.type==='range')return;
   if(document.body.classList.contains('edit')&&sel&&(e.code==='Delete'||e.code==='Backspace')){e.preventDefault();$('eDel').click();return}
+  if(current&&pages.length&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
+    if(e.code==='KeyP'){e.preventDefault();tempoToggle();return}
+    if(e.code==='KeyT'){e.preventDefault();tapTempo();return}
+    if(e.code==='KeyR'){e.preventDefault();tempoReset();return}
+  }
   if(['ArrowRight','PageDown','Space','Enter'].includes(e.code)){e.preventDefault();next()}
   else if(['ArrowLeft','PageUp','Backspace'].includes(e.code)){e.preventDefault();prev()}
   else if(e.code==='Escape')setFocus(false);
@@ -470,16 +503,16 @@ document.addEventListener('keydown',e=>{
   else if(e.code==='End')turn(pages.length-1);
 });
 view.addEventListener('click',e=>{
-  if(!pages.length||document.body.classList.contains('edit'))return;
+  if(!pages.length||document.body.classList.contains('edit')||document.body.classList.contains('calib'))return;
   const r=view.getBoundingClientRect(),x=(e.clientX-r.left)/r.width;
-  if(x>0.7)next();else if(x<0.3)prev();
+  if(x>0.7)next();else if(x<0.3)prev();else if(document.body.classList.contains('focus')&&sysOf(cur).length)tempoToggle();
 });
 let tx=null,ty=null;
 view.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});
 view.addEventListener('touchend',e=>{
   if(tx===null)return;
   const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;tx=null;
-  if(pages.length&&!document.body.classList.contains('edit')&&Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5){dx<0?next():prev()}
+  if(pages.length&&!document.body.classList.contains('edit')&&!document.body.classList.contains('calib')&&Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5){dx<0?next():prev()}
 },{passive:true});
 
 /* ---------- marks: circles & text (saved per PDF) ---------- */
@@ -636,6 +669,7 @@ $('eDel').onclick=()=>{
 };
 function setEdit(on){
   if(on&&!pages.length)return;
+  if(on)setCalib(false);
   document.body.classList.toggle('edit',on);sel=null;drag=null;
   $('editBtn').classList.toggle('primary',on);
   renderMarks();layout();setTimeout(layout,50);
@@ -686,7 +720,7 @@ async function exportLibrary(){
       const rec=await dbFile(m.id);if(!rec)continue;
       const file='files/'+m.id+'.pdf';
       zip.file(file,await rec.blob.arrayBuffer());
-      entries.push({id:m.id,title:m.title,author:m.author||'',pinned:!!m.pinned,added:m.added,updated:m.updated||m.added,numPages:m.numPages||0,page:m.page||0,crop:m.crop||{l:0,r:0,t:0,b:0},marks:m.marks||{},hash:m.hash||'',file});
+      entries.push({id:m.id,title:m.title,author:m.author||'',pinned:!!m.pinned,added:m.added,updated:m.updated||m.added,numPages:m.numPages||0,page:m.page||0,crop:m.crop||{l:0,r:0,t:0,b:0},marks:m.marks||{},tempo:m.tempo||null,hash:m.hash||'',file});
     }
     zip.file('library.json',JSON.stringify({format:'partitura-library',version:1,app:'Partitura',exportedAt:Date.now(),device:(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||'',entries},null,1));
     const blob=await zip.generateAsync({type:'blob',compression:'STORE'});
@@ -724,7 +758,7 @@ function cleanEntry(e){
   const cr=e.crop||{};
   return{id:(typeof e.id==='string'&&/^[\w-]{4,64}$/.test(e.id))?e.id:uid(),title,author:typeof e.author==='string'?e.author.trim().slice(0,120):'',pinned:!!e.pinned,
     added:num(e.added,0,8.64e15,Date.now()),updated:num(e.updated,0,8.64e15,0),numPages:Math.round(num(e.numPages,0,100000,0)),page:Math.round(num(e.page,0,100000,0)),
-    crop:{l:num(cr.l,0,45),r:num(cr.r,0,45),t:num(cr.t,0,45),b:num(cr.b,0,45)},marks:cleanMarks(e.marks),hash:typeof e.hash==='string'?e.hash.slice(0,80):'',file:e.file};
+    crop:{l:num(cr.l,0,45),r:num(cr.r,0,45),t:num(cr.t,0,45),b:num(cr.b,0,45)},marks:cleanMarks(e.marks),tempo:cleanTempo(e.tempo),hash:typeof e.hash==='string'?e.hash.slice(0,80):'',file:e.file};
 }
 function askImport(info,nLocal,nBackup){return new Promise(res=>{
   const d=$('iDlg'),ok=$('iOk'),radios=[...document.querySelectorAll('input[name=imode]')];
@@ -774,7 +808,7 @@ async function importLibrary(file){
         if(idHit&&!match)e.id=uid();
         if(match){
           if(e.updated>(match.updated||match.added||0)){
-            Object.assign(match,{title:e.title,author:e.author,pinned:e.pinned,crop:e.crop,marks:e.marks,page:e.page,updated:e.updated});
+            Object.assign(match,{title:e.title,author:e.author,pinned:e.pinned,crop:e.crop,marks:e.marks,tempo:e.tempo,page:e.page,updated:e.updated});
             await dbMeta({...match,crop:{...match.crop}});updated++;
           }else same++;
           continue;
@@ -785,7 +819,7 @@ async function importLibrary(file){
         const hash=await sha256(buf);
         if(!weak(e.hash)&&!weak(hash)&&e.hash!==hash)throw new Error('damaged file');
         if(!weak(hash)&&byHash.has(hash)){same++;continue}
-        const meta={id:e.id,title:e.title,author:e.author,pinned:e.pinned,added:e.added,updated:e.updated||e.added,numPages:e.numPages,page:e.page,crop:e.crop,marks:e.marks,hash};
+        const meta={id:e.id,title:e.title,author:e.author,pinned:e.pinned,added:e.added,updated:e.updated||e.added,numPages:e.numPages,page:e.page,crop:e.crop,marks:e.marks,tempo:e.tempo,hash};
         await dbPut(meta,new Blob([buf],{type:'application/pdf'}));
         byId.set(meta.id,meta);if(!weak(hash))byHash.set(hash,meta);added++;
       }catch(err){bad++}
@@ -872,6 +906,204 @@ async function exportPdf(target,btn){
 }
 
 
+/* ---------- tempo line: per-page systems, timing engine, playback ---------- */
+/* duration(s) = (60 / BPM) x beats per measure x measures in the system.
+   Position is stored as a fraction (0..1) of the current system, so changing BPM mid-playback
+   changes the speed instantly and the line stays exactly where it is. */
+const tp={running:false,started:false,sys:0,frac:0,last:0,raf:0};
+let viewS=1,trkEl=null,taps=[],sysDrag=null;
+const T_COLORS=['#ffd600','#ff9800','#4caf50','#29b6f6','#ff4081'];
+const defTempo=()=>({bpm:100,beats:4,w:3,o:45,c:'#ffd600',lastM:4,pages:{}});
+function tempo(create){
+  if(!current)return null;
+  if(!current.tempo){if(!create)return null;current.tempo=defTempo()}
+  return current.tempo;
+}
+const sysOf=p=>{const T=current&&current.tempo;return(T&&T.pages&&T.pages[p])||[]};
+const sysDur=s=>{const T=tempo(true);return(60/T.bpm)*T.beats*s.m};
+function cleanTempo(t){
+  if(!t||typeof t!=='object')return null;
+  const o={bpm:num(t.bpm,20,300,100),beats:Math.round(num(t.beats,1,16,4)),w:num(t.w,1,12,3),o:num(t.o,15,100,45),c:colOK(t.c)?t.c:'#ffd600',lastM:Math.round(num(t.lastM,1,64,4)),pages:{}};
+  if(t.pages&&typeof t.pages==='object')for(const k of Object.keys(t.pages)){
+    if(!/^\d{1,5}$/.test(k)||!Array.isArray(t.pages[k]))continue;
+    const list=[];
+    for(const s of t.pages[k].slice(0,40)){
+      if(!s||typeof s!=='object')continue;
+      const x0=num(s.x0,0,1),x1=num(s.x1,0,1),y0=num(s.y0,0,1),y1=num(s.y1,0,1);
+      if(x1-x0>.01&&y1-y0>.004)list.push({x0,x1,y0,y1,m:Math.round(num(s.m,1,64,4))});
+    }
+    if(list.length)o.pages[k]=list;
+  }
+  return o;
+}
+function buildTempo(){
+  const tv=$('tv');trkEl=null;if(!tv||!pages[cur])return;
+  const nw=pages[cur].el.width,nh=pages[cur].el.height,T=tempo(),sy=sysOf(cur),S=1/(viewS||1);
+  const calib=document.body.classList.contains('calib'),panel=$('tempobar').classList.contains('open');
+  tv.replaceChildren();
+  if(calib||panel){
+    sy.forEach((s,i)=>{
+      tv.appendChild(svgEl('rect',{x:s.x0*nw,y:s.y0*nh,width:(s.x1-s.x0)*nw,height:(s.y1-s.y0)*nh,fill:'#ffd600','fill-opacity':calib?.12:.06,stroke:'#d9a400','stroke-width':1.5*S,'stroke-dasharray':(6*S)+' '+(4*S)}));
+      const t=svgEl('text',{x:s.x0*nw+4*S,y:s.y0*nh+14*S,'font-size':13*S,'font-family':'system-ui,sans-serif','font-weight':'700',fill:'#8a6a00'});t.textContent=String(i+1);tv.appendChild(t);
+    });
+    if(sysDrag){
+      const a=Math.min(sysDrag.x0,sysDrag.x1),b=Math.max(sysDrag.x0,sysDrag.x1),c=Math.min(sysDrag.y0,sysDrag.y1),d=Math.max(sysDrag.y0,sysDrag.y1);
+      tv.appendChild(svgEl('rect',{x:a*nw,y:c*nh,width:(b-a)*nw,height:(d-c)*nh,fill:'#e8794a','fill-opacity':.15,stroke:'#e8794a','stroke-width':2*S}));
+    }
+  }
+  if(sy.length&&!calib&&(tp.running||tp.started||panel)){
+    trkEl=svgEl('rect',{'shape-rendering':'geometricPrecision'});
+    trkEl.setAttribute('fill',T?T.c:'#ffd600');trkEl.setAttribute('fill-opacity',(T?T.o:45)/100);
+    tv.appendChild(trkEl);moveTracker();
+  }
+}
+function moveTracker(){
+  if(!trkEl||!pages[cur])return;
+  const sy=sysOf(cur),s=sy[Math.min(tp.sys,sy.length-1)];if(!s)return;
+  const nw=pages[cur].el.width,nh=pages[cur].el.height,T=tempo(),wpx=(T?T.w:3)/(viewS||1);
+  trkEl.setAttribute('x',(s.x0+(s.x1-s.x0)*tp.frac)*nw-wpx/2);
+  trkEl.setAttribute('y',s.y0*nh);trkEl.setAttribute('width',wpx);trkEl.setAttribute('height',(s.y1-s.y0)*nh);
+}
+function tpUI(){const b=$('tPlay');if(!b)return;b.textContent=tp.running?'⏸ Pause':'▶ Start';b.classList.toggle('primary',!tp.running)}
+function frame(ts){
+  if(!tp.running)return;
+  const dt=Math.min(.25,Math.max(0,(ts-tp.last)/1000));tp.last=ts;
+  advance(dt);
+  if(tp.running){moveTracker();tp.raf=requestAnimationFrame(frame)}
+}
+function advance(dt){
+  let rem=dt,guard=0;
+  while(rem>1e-9&&tp.running&&guard++<500){
+    const sy=sysOf(cur),s=sy[tp.sys];
+    if(!s){tempoPause();toast('No systems on this page');return}
+    const dur=sysDur(s),need=(1-tp.frac)*dur;
+    if(rem<need){tp.frac+=rem/dur;rem=0}
+    else{rem-=need;tp.frac=0;if(!nextSystem())return}
+  }
+}
+function nextSystem(){
+  const sy=sysOf(cur);
+  if(tp.sys+1<sy.length){tp.sys++;moveTracker();return true}
+  if(cur+1<pages.length){
+    const ok=show(cur+1);
+    if(!ok){tempoPause();return false}
+    turnLock=performance.now()+COOLDOWN;
+    tp.sys=0;tp.frac=0;
+    if(!sysOf(cur).length){tempoPause();toast('No systems set on page '+(cur+1)+' — tracking paused');return false}
+    moveTracker();return true;
+  }
+  tp.sys=Math.max(0,sy.length-1);tp.frac=1;tempoPause();moveTracker();toast('End of score');return false;
+}
+function tempoStart(){
+  if(!current||!pages.length||tp.running)return;
+  const sy=sysOf(cur);
+  if(!sy.length){toast('No systems on this page. Open 🎯 Tempo, then ✎ Calibrate');return}
+  if(tp.sys>=sy.length||(tp.sys===sy.length-1&&tp.frac>=1)){tp.sys=0;tp.frac=0}
+  tp.running=true;tp.started=true;tp.last=performance.now();tp.raf=requestAnimationFrame(frame);
+  tpUI();buildTempo();
+}
+function tempoPause(){tp.running=false;cancelAnimationFrame(tp.raf);tpUI()}
+function tempoToggle(){tp.running?tempoPause():tempoStart()}
+function tempoReset(){tempoPause();tp.sys=0;tp.frac=0;tp.started=false;buildTempo();toast('Tempo line reset')}
+function tempoHalt(){
+  tp.running=false;cancelAnimationFrame(tp.raf);tp.started=false;tp.sys=0;tp.frac=0;taps=[];sysDrag=null;
+  document.body.classList.remove('calib');
+  const pn=$('tempobar');if(pn)pn.classList.remove('open');
+  tpUI();
+}
+function tempoOnShow(was){
+  if(cur!==was){tp.sys=0;tp.frac=0}
+  buildTempo();renderSysList();
+}
+function setBpm(v){
+  const T=tempo(true);if(!T)return;
+  T.bpm=Math.max(20,Math.min(300,Math.round(v*10)/10));$('tBpm').value=T.bpm;saveMeta();
+}
+function tapTempo(){
+  const now=performance.now();
+  if(taps.length&&now-taps[taps.length-1]>2500)taps=[];
+  taps.push(now);if(taps.length>8)taps.shift();
+  if(taps.length<2){toast('Tap again to set the tempo');return}
+  let sum=0;for(let i=1;i<taps.length;i++)sum+=taps[i]-taps[i-1];
+  setBpm(60000/(sum/(taps.length-1)));toast('Tempo: '+tempo().bpm+' BPM');
+}
+function bindCalib(ov){
+  const d0=ov.onpointerdown,m0=ov.onpointermove,u0=ov.onpointerup;
+  const cl=v=>Math.max(0,Math.min(1,v));
+  ov.onpointerdown=e=>{
+    if(document.body.classList.contains('calib')){const p=ptr(e);sysDrag={x0:cl(p.x),y0:cl(p.y),x1:cl(p.x),y1:cl(p.y)};ov.setPointerCapture(e.pointerId);buildTempo();return}
+    return d0&&d0.call(ov,e);
+  };
+  ov.onpointermove=e=>{
+    if(sysDrag){const p=ptr(e);sysDrag.x1=cl(p.x);sysDrag.y1=cl(p.y);buildTempo();return}
+    return m0&&m0.call(ov,e);
+  };
+  ov.onpointerup=ov.onpointercancel=e=>{
+    if(sysDrag){const d=sysDrag;sysDrag=null;addSystem(d);return}
+    return u0&&u0.call(ov,e);
+  };
+}
+function addSystem(d){
+  const x0=Math.min(d.x0,d.x1),x1=Math.max(d.x0,d.x1),y0=Math.min(d.y0,d.y1),y1=Math.max(d.y0,d.y1);
+  if(x1-x0<.04||y1-y0<.012){buildTempo();toast('Box too small — drag around a whole staff row');return}
+  const T=tempo(true);T.pages[cur]=T.pages[cur]||[];
+  if(T.pages[cur].length>=40){toast('Up to 40 systems per page');buildTempo();return}
+  T.pages[cur].push({x0,x1,y0,y1,m:T.lastM||4});
+  T.pages[cur].sort((a,b)=>(a.y0-b.y0)||(a.x0-b.x0));
+  saveMeta();buildTempo();renderSysList();
+}
+function setCalib(on){
+  if(on&&!pages.length)return;
+  if(on)setEdit(false);
+  document.body.classList.toggle('calib',on);sysDrag=null;
+  const b=$('tCal');if(b){b.classList.toggle('primary',on);b.textContent=on?'✔ Done':'✎ Calibrate'}
+  if(on){tempoPause();toast('Drag a box around each staff row, top to bottom')}
+  buildTempo();
+}
+function renderSysList(){
+  const box=$('sysList');if(!box)return;box.replaceChildren();
+  if(!current||!pages.length)return;
+  const sy=sysOf(cur);
+  if(!sy.length){
+    const d=document.createElement('div');d.className='hint';
+    d.textContent='No systems on this page yet. Tap ✎ Calibrate, then drag a box around each staff row, top to bottom. Drag each box from the first to the last measure of the row.';
+    box.appendChild(d);return;
+  }
+  const mk=(t,fn,title)=>{const b=document.createElement('button');b.textContent=t;b.onclick=fn;if(title){b.title=title;b.setAttribute('aria-label',title)}return b};
+  sy.forEach((s,i)=>{
+    const row=document.createElement('div');row.className='srow2';
+    const lab=document.createElement('span');lab.textContent='System '+(i+1)+' · '+s.m+' measure'+(s.m===1?'':'s')+' · '+sysDur(s).toFixed(1)+' s';
+    const chg=n=>{s.m=Math.max(1,Math.min(64,s.m+n));const T=tempo(true);T.lastM=s.m;saveMeta();renderSysList()};
+    row.append(lab,mk('−',()=>chg(-1),'Fewer measures'),mk('+',()=>chg(1),'More measures'),
+      mk('🗑',()=>{const T=tempo(true);T.pages[cur].splice(i,1);if(tp.sys>=T.pages[cur].length){tp.sys=0;tp.frac=0}saveMeta();buildTempo();renderSysList()},'Delete system'));
+    box.appendChild(row);
+  });
+}
+function syncTempoUI(){
+  const T=tempo()||defTempo();
+  $('tBpm').value=T.bpm;$('tBeats').value=T.beats;$('tW').value=T.w;$('tO').value=T.o;
+  for(const b of document.querySelectorAll('#tColors .sw'))b.classList.toggle('on',b.dataset.c===T.c);
+  tpUI();renderSysList();
+}
+$('tBpm').oninput=e=>{const v=parseFloat(e.target.value);if(isFinite(v)&&v>=20&&v<=300){const T=tempo(true);if(T){T.bpm=v;saveMeta()}}};
+$('tBeats').oninput=e=>{const v=parseInt(e.target.value,10);if(v>=1&&v<=16){const T=tempo(true);if(T){T.beats=v;saveMeta()}}};
+$('tW').oninput=e=>{const T=tempo(true);if(T){T.w=+e.target.value;saveMeta();moveTracker()}};
+$('tO').oninput=e=>{const T=tempo(true);if(T){T.o=+e.target.value;saveMeta();buildTempo()}};
+for(const c of T_COLORS){
+  const b=document.createElement('button');b.className='sw';b.dataset.c=c;b.style.background=c;b.setAttribute('aria-label','Line colour '+c);
+  b.onclick=()=>{const T=tempo(true);if(T){T.c=c;saveMeta();buildTempo();syncTempoUI()}};
+  $('tColors').appendChild(b);
+}
+$('tPlay').onclick=tempoToggle;$('tReset').onclick=tempoReset;$('tTap').onclick=tapTempo;
+$('tCal').onclick=()=>setCalib(!document.body.classList.contains('calib'));
+$('tempoBtn').onclick=()=>{
+  const pn=$('tempobar');pn.classList.toggle('open');
+  if(!pn.classList.contains('open'))setCalib(false);
+  syncTempoUI();buildTempo();layout();
+};
+if(window.ResizeObserver)new ResizeObserver(()=>{try{layout()}catch(e){}}).observe(view);
+tpUI();
+
 /* ---------- brightness / contrast: a CSS filter on the page layer only (view-only; PDF data is never touched) ---------- */
 let bri=+lsGet('bri',100),con=+lsGet('con',100);
 if(!isFinite(bri))bri=100;if(!isFinite(con))con=100;
@@ -942,7 +1174,11 @@ function parseCommand(txt){
   if(/\bfit\b/.test(s))return{a:'fit'};
   const m=s.match(/\bpage ([a-z0-9 -]+)$/)||s.match(/\bgo to ([a-z0-9 -]+)$/);
   if(m){const n=parseNum(m[1]);if(n!==null)return{a:'goto',n}}
-  if(/\b(first page|beginning|start)\b/.test(s))return{a:'first'};
+  if(/\btap( tempo)?\b/.test(s))return{a:'tap'};
+  if(/\b(pause|hold|freeze)\b|^stop$/.test(s))return{a:'pause'};
+  if(/\breset\b/.test(s))return{a:'reset'};
+  if(/\b(start|play|resume)\b/.test(s))return{a:'start'};
+  if(/\b(first page|beginning)\b/.test(s))return{a:'first'};
   if(/\b(last page|end)\b/.test(s))return{a:'last'};
   if(/\b(previous|back|backward|backwards|before)\b/.test(s))return{a:'prev'};
   if(/\b(next|forward|turn)\b|\bgo\b(?! to\b)/.test(s))return{a:'next'};
@@ -952,6 +1188,10 @@ function runCommand(c){
   const inDoc=pages.length>0;
   switch(c.a){
     case 'stop':stopVoice();toast('Voice commands off');break;
+    case 'start':if(current&&pages.length){tempoStart();toast('Tempo line: start')}break;
+    case 'pause':if(current&&pages.length){tempoPause();toast('Tempo line: paused')}break;
+    case 'reset':if(current&&pages.length)tempoReset();break;
+    case 'tap':if(current&&pages.length)tapTempo();break;
     case 'library':showLibrary();toast('Library');break;
     case 'menu':setFocus(false);toast('Menu');break;
     case 'fit':if(current){setFocus(true);toast('Fit')}break;
