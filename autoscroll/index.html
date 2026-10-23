@@ -57,10 +57,15 @@ body.edit #editbar{display:flex}
 #cropbar label{display:flex;align-items:center;gap:6px;min-width:0}
 #cropbar input{flex:1;min-width:0;accent-color:var(--accent)}
 #cropbar output{min-width:34px;text-align:right;color:var(--muted)}
-#bar{display:flex;align-items:center;gap:6px;padding:5px 10px;border-top:1px solid var(--line);background:var(--surface)}
-#bar button.nav{flex:1;padding:7px 8px;font-size:.9rem;border-radius:8px}
-#bar button#exitFit{padding:7px 8px;font-size:.85rem;border-radius:8px}
-#ind{min-width:52px;text-align:center;color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}
+#bar{display:grid;grid-template-columns:1fr auto auto auto 1fr;align-items:center;gap:6px;padding:5px 10px;border-top:1px solid var(--line);background:var(--surface)}
+#bar button{padding:7px 8px;font-size:.9rem;border-radius:8px;min-height:38px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;justify-content:center}
+#ind{min-width:56px;text-align:center;color:var(--muted);font-size:.9rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+body.focus #libBtn,body.focus #fit{display:none}
+body.focus #bar{grid-template-columns:1fr auto auto 1fr}
+@media (max-width:420px){#bar{gap:5px;padding:5px 8px}#bar button{font-size:.82rem;padding:7px 5px}#ind{min-width:48px;font-size:.82rem}}
+#bar #libBtn,#bar #fit,#bar #exitFit{min-width:40px}
+@media (max-width:400px){#prev .lbl,#next .lbl{display:none}}
+@media (max-width:350px){#bar .lbl{display:none}}
 body.focus header,body.focus #cropbar{display:none}
 .pn{display:none;position:fixed;z-index:6;pointer-events:none;font-weight:800;font-size:clamp(2rem,9vw,3.4rem);line-height:1;padding:4px 14px;border-radius:12px;background:rgba(0,0,0,.6);color:#fff;font-variant-numeric:tabular-nums}
 body.focus:not(.lib) .pn{display:block}
@@ -110,13 +115,11 @@ body.focus #lightbar{display:none}
 <body class="lib">
 <header>
   <h1 id="title">🎼 Partitura</h1>
-  <button id="libBtn" title="Back to library">📚 Library</button>
   <input id="file" type="file" accept="application/pdf,.pdf" multiple hidden>
   <input id="impFile" type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden>
   <button id="cropBtn" title="Crop margins">✂ Crop</button>
   <button id="lightBtn" title="Brightness and contrast (view only)">☀ Light</button>
   <button id="editBtn" title="Draw circles and add text">✏ Edit</button>
-  <button id="fit" title="Hide all controls except Previous / Next (Esc or double-tap to restore)">⤢ Fit</button>
   <button id="mic" title="Voice commands">🎤</button>
   <button id="setBtn" title="Microphone sensitivity, volume and page-turn beep">⚙ Audio</button>
 </header>
@@ -150,10 +153,12 @@ body.focus #lightbar{display:none}
   <button id="cReset">Reset (saved for this PDF)</button>
 </div>
 <div id="bar">
-  <button id="prev" class="nav" disabled>◀ Previous</button>
+  <button id="prev" class="nav" disabled aria-label="Previous page">◀<span class="lbl"> Previous</span></button>
+  <button id="libBtn" title="Back to library" aria-label="Library">📚<span class="lbl"> Library</span></button>
+  <button id="exitFit" title="Back to main screen" aria-label="Menu">☰<span class="lbl"> Menu</span></button>
   <span id="ind">–</span>
-  <button id="exitFit" title="Back to main screen">☰ Menu</button>
-  <button id="next" class="nav primary" disabled>Next ▶</button>
+  <button id="fit" title="Hide all controls except Previous / Next (Esc or double-tap to restore)" aria-label="Fit">⤢<span class="lbl"> Fit</span></button>
+  <button id="next" class="nav primary" disabled aria-label="Next page"><span class="lbl">Next </span>▶</button>
 </div>
 
 <dialog id="tDlg">

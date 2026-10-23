@@ -1,6 +1,6 @@
 /* Partitura service worker: offline app shell + cached PDF libraries.
    Bump CACHE when you change any file so phones pick up the update. */
-const CACHE = 'partitura-v14';
+const CACHE = 'partitura-v16';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'
