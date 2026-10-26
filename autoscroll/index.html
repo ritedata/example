@@ -62,7 +62,13 @@ body.edit #editbar{display:flex}
 #bar button{padding:7px 8px;font-size:.9rem;border-radius:8px;min-height:38px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;justify-content:center}
 #ind{min-width:56px;text-align:center;color:var(--muted);font-size:.9rem;font-variant-numeric:tabular-nums;white-space:nowrap}
 body.focus #libBtn,body.focus #fit{display:none}
-body.focus #bar{grid-template-columns:1fr auto auto 1fr}
+body.focus #bar{grid-template-columns:1fr auto auto auto auto 1fr}
+.tpb{display:none}
+body.focus .tpb{display:inline-flex}
+#bar #bPlay{min-width:88px}
+#bar #bReset{min-width:40px}
+#bPlay.playing{background:#2e7d32;border-color:#2e7d32;color:#fff;font-weight:600}
+@media (max-width:520px){body.focus #bar #exitFit .lbl,.tpb .lbl{display:none}#bar #bPlay{min-width:40px}}
 @media (max-width:420px){#bar{gap:5px;padding:5px 8px}#bar button{font-size:.82rem;padding:7px 5px}#ind{min-width:48px;font-size:.82rem}}
 #bar #libBtn,#bar #fit,#bar #exitFit{min-width:40px}
 @media (max-width:400px){#prev .lbl,#next .lbl{display:none}}
@@ -229,6 +235,8 @@ body.edit #ov .snh{pointer-events:auto;cursor:nwse-resize}
   <button id="prev" class="nav" disabled aria-label="Previous page">◀<span class="lbl"> Previous</span></button>
   <button id="libBtn" title="Back to library" aria-label="Library">📚<span class="lbl"> Library</span></button>
   <button id="exitFit" title="Back to main screen" aria-label="Menu">☰<span class="lbl"> Menu</span></button>
+  <button id="bPlay" class="tpb" aria-label="Play tempo line" aria-pressed="false" title="Play: start the tempo line (P)"><span class="ic">▶</span><span class="lbl"> Play</span></button>
+  <button id="bReset" class="tpb" aria-label="Reset: back to System 1 of this page" title="Reset: back to System 1 of this page (R)"><span class="ic">⟲</span><span class="lbl"> Reset</span></button>
   <span id="ind">–</span>
   <button id="fit" title="Hide all controls except Previous / Next (Esc or double-tap to restore)" aria-label="Fit">⤢<span class="lbl"> Fit</span></button>
   <button id="next" class="nav primary" disabled aria-label="Next page"><span class="lbl">Next </span>▶</button>
@@ -1479,7 +1487,16 @@ function moveTracker(){
   trkEl.setAttribute('x',(s.x0+(s.x1-s.x0)*tp.frac)*nw-wpx/2);
   trkEl.setAttribute('y',s.y0*nh);trkEl.setAttribute('width',wpx);trkEl.setAttribute('height',(s.y1-s.y0)*nh);
 }
-function tpUI(){const b=$('tPlay');if(!b)return;b.textContent=tp.running?'⏸ Pause':'▶ Start';b.classList.toggle('primary',!tp.running)}
+function tpUI(){
+  const b=$('tPlay');
+  if(b){b.textContent=tp.running?'❚❚ Pause':'▶ Start';b.classList.toggle('primary',!tp.running)}
+  const q=$('bPlay');
+  if(q){
+    q.classList.toggle('playing',tp.running);q.setAttribute('aria-pressed',tp.running?'true':'false');
+    q.setAttribute('aria-label',tp.running?'Pause tempo line':'Play tempo line');q.title=tp.running?'Pause: freeze the tempo line where it is (P)':'Play: start the tempo line (P)';
+    q.querySelector('.ic').textContent=tp.running?'❚❚':'▶';q.querySelector('.lbl').textContent=tp.running?' Pause':' Play';
+  }
+}
 function frame(ts){
   if(!tp.running)return;
   const dt=Math.min(.25,Math.max(0,(ts-tp.last)/1000));tp.last=ts;
@@ -1531,7 +1548,7 @@ function tempoStart(){
 }
 function tempoPause(){tp.running=false;cancelAnimationFrame(tp.raf);tpUI()}
 function tempoToggle(){tp.running?tempoPause():tempoStart()}
-function tempoReset(){tempoPause();tp.sys=0;tp.frac=0;tp.started=false;buildTempo();toast('Tempo line reset')}
+function tempoReset(){tempoPause();tp.sys=Math.max(0,firstOn(sysOf(cur),0));tp.frac=0;tp.started=sysOf(cur).length>0;buildTempo();toast('Tempo line back at System 1')}
 function tempoHalt(){
   tp.running=false;cancelAnimationFrame(tp.raf);tp.started=false;tp.sys=0;tp.frac=0;taps=[];sysDrag=null;
   document.body.classList.remove('calib');
@@ -1733,6 +1750,7 @@ for(const c of T_COLORS){
   $('tColors').appendChild(b);
 }
 $('tPlay').onclick=tempoToggle;$('tReset').onclick=tempoReset;$('tTap').onclick=tapTempo;
+$('bPlay').onclick=tempoToggle;$('bReset').onclick=tempoReset;
 $('tCal').onclick=()=>setCalib(!document.body.classList.contains('calib'));
 $('tempoBtn').onclick=()=>{
   const pn=$('tempobar');pn.classList.toggle('open');
