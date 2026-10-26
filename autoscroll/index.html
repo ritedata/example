@@ -120,6 +120,8 @@ body.edit #ov[data-tool=pan]{cursor:grab}
 body.edit #ov[data-tool=pan] .mk{pointer-events:none}
 #view.spacepan,#view.spacepan #ov{cursor:grab!important}
 #view.panning,#view.panning *{cursor:grabbing!important}
+body.edit #ov[data-tool=tbox] .mk{pointer-events:none}
+body.edit #ov .tbh,body.calib #ov .tbh{pointer-events:auto}
 #tcb{position:absolute;inset:0;pointer-events:none}
 .tcb{position:absolute;width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:rgba(21,19,15,.82);border:1px solid rgba(255,255,255,.25);border-radius:7px;pointer-events:auto;cursor:pointer;z-index:3}
 .tcb input{width:16px;height:16px;margin:0;accent-color:var(--accent);cursor:pointer}
@@ -199,6 +201,7 @@ body.edit #ov .snh{pointer-events:auto;cursor:nwse-resize}
   <button data-tool="erase">🧽 Eraser</button>
   <button data-tool="region" title="Select a region of the sheet, then copy it and paste it as a movable picture">⬚ Region</button>
   <button data-tool="pan" title="Drag to move around when zoomed in (also: hold Space and drag, or use two fingers)">✋ Pan</button>
+  <button data-tool="tbox" title="Select a tempo box to resize it (drag a handle) or move it (drag inside it)">🎯 Boxes</button>
   <button data-tool="text">🅣 Text</button>
   <button data-tool="select">☝ Select</button>
   <span id="regionOpts"><button id="rgCopy" title="Copy the selected region (Ctrl/Cmd+C)">📋 Copy</button></span>
@@ -473,7 +476,7 @@ function layout(){
   w.style.width=(cw*s)+'px';w.style.height=(ch*s)+'px';
   el.style.width=(nw*s)+'px';el.style.height=(nh*s)+'px';el.style.marginLeft=(-l*nw*s)+'px';el.style.marginTop=(-t*nh*s)+'px';
   for(const id of ['ov','tv']){const o=$(id);if(o){o.style.width=(nw*s)+'px';o.style.height=(nh*s)+'px';o.style.marginLeft=(-l*nw*s)+'px';o.style.marginTop=(-t*nh*s)+'px'}}
-  viewS=s;buildTempo();
+  viewS=s;buildTempo();renderMarks();
 }
 function syncCrop(save=true){
   $('cl').value=cropL;$('cr').value=cropR;$('ct').value=cropT;$('cb').value=cropB;
@@ -554,6 +557,7 @@ view.addEventListener('dblclick',e=>{
 
 document.addEventListener('keydown',e=>{
   if(document.querySelector('dialog[open]')||e.target.type==='text'||e.target.type==='range')return;
+  if(selSys&&(document.body.classList.contains('calib')||(tool==='tbox'&&document.body.classList.contains('edit')))&&(e.code==='Delete'||e.code==='Backspace')){e.preventDefault();deleteSelSys();return}
   if(document.body.classList.contains('edit')&&sel&&(e.code==='Delete'||e.code==='Backspace')){e.preventDefault();$('eDel').click();return}
   if(zActive()&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
     if(e.code==='Space'){e.preventDefault();spaceDown=true;view.classList.add('spacepan');return}
@@ -658,6 +662,7 @@ function renderMarks(){
     if(m.t==='snip'&&sel===m.id)addHandles(ov,m,nw,nh);
   }
   drawRegion(ov,nw,nh);
+  drawTempoHandles(ov,nw,nh);
   syncSnipUI();
 }
 /* ---------- zoom & pan (edit and calibrate modes) ----------
@@ -685,6 +690,7 @@ function cancelDrawing(){
     if(d.k==='new'){const l=pageMarks(),i=l.indexOf(d.m);if(i>=0)l.splice(i,1);hist.pop()}
     else if((d.k==='move'||d.k==='resize')&&d.moved)$('eUndo').click();
   }
+  if(sysAct){const a=sysAct;sysAct=null;if(a.moved)Object.assign(a.s,a.orig)}
   regionDrag=null;sysDrag=null;renderMarks();buildTempo();
 }
 const gp=new Map();let gest=null,pan=null,spaceDown=false;
@@ -943,7 +949,7 @@ function toolsUI(){
   $('eShape').textContent=eraseShape==='rect'?'▭ Box':'● Brush';$('eSz').value=eraseSize;$('eSzv').textContent=eraseSize;
   for(const b of document.querySelectorAll('#eColors .sw'))b.classList.toggle('on',b.dataset.c===color);
 }
-for(const b of document.querySelectorAll('#editbar [data-tool]'))b.onclick=()=>{tool=b.dataset.tool;if(tool!=='select')sel=null;renderMarks();toolsUI()};
+for(const b of document.querySelectorAll('#editbar [data-tool]'))b.onclick=()=>{tool=b.dataset.tool;if(tool!=='select')sel=null;selSys=null;sysAct=null;buildTempo();renderMarks();toolsUI()};
 for(const c of COLORS){
   const b=document.createElement('button');b.className='sw';b.dataset.c=c;b.style.background=c;b.setAttribute('aria-label','Colour '+c);
   b.onclick=()=>{color=c;const m=selMark();if(m&&m.t!=='erase'){snap();m.c=c;renderMarks();saveMeta()}toolsUI()};
@@ -970,7 +976,7 @@ $('eDel').onclick=()=>{
 function setEdit(on){
   if(on&&!pages.length)return;
   if(on)setCalib(false);
-  document.body.classList.toggle('edit',on);sel=null;drag=null;
+  document.body.classList.toggle('edit',on);sel=null;drag=null;selSys=null;sysAct=null;
   $('editBtn').classList.toggle('primary',on);
   renderMarks();layout();setTimeout(layout,50);
   if(on)toast('Edit: draw shapes, tap for text, drag any mark to move it');
@@ -1418,7 +1424,7 @@ $('pgDup').onclick=()=>modifyPages('dup',cur);$('pgDel').onclick=()=>askDelete(c
    Position is stored as a fraction (0..1) of the current system, so changing BPM mid-playback
    changes the speed instantly and the line stays exactly where it is. */
 const tp={running:false,started:false,sys:0,frac:0,last:0,raf:0};
-let viewS=1,trkEl=null,taps=[],sysDrag=null;
+let viewS=1,trkEl=null,taps=[],sysDrag=null,selSys=null,sysAct=null;
 const T_COLORS=['#ffd600','#ff9800','#4caf50','#29b6f6','#ff4081'];
 const defTempo=()=>({bpm:100,beats:4,w:3,o:45,c:'#ffd600',lastM:4,pages:{}});
 function tempo(create){
@@ -1450,7 +1456,8 @@ function buildTempo(){
   tv.replaceChildren();
   if(sy.length||calib||panel){
     sy.forEach((s,i)=>{
-      tv.appendChild(svgEl('rect',{x:s.x0*nw,y:s.y0*nh,width:(s.x1-s.x0)*nw,height:(s.y1-s.y0)*nh,fill:s.on===false?'#888':'#ffd600','fill-opacity':s.on===false?.14:(calib?.12:(panel?.06:.04)),stroke:s.on===false?'#777':'#d9a400','stroke-opacity':(calib||panel)?1:.5,'stroke-width':1.5*S,'stroke-dasharray':(6*S)+' '+(4*S)}));
+      const isSel=selSys===s;
+      tv.appendChild(svgEl('rect',{x:s.x0*nw,y:s.y0*nh,width:(s.x1-s.x0)*nw,height:(s.y1-s.y0)*nh,fill:s.on===false?'#888':'#ffd600','fill-opacity':s.on===false?.14:(isSel?.2:(calib?.12:(panel?.06:.04))),stroke:isSel?'#e8794a':(s.on===false?'#777':'#d9a400'),'stroke-opacity':(calib||panel||isSel)?1:.5,'stroke-width':(isSel?2.5:1.5)*S,'stroke-dasharray':isSel?'none':(6*S)+' '+(4*S)}));
       const t=svgEl('text',{x:s.x0*nw+4*S,y:s.y0*nh+14*S,'font-size':13*S,'font-family':'system-ui,sans-serif','font-weight':'700',fill:'#8a6a00'});t.textContent=String(i+1);if(calib||panel)tv.appendChild(t);
     });
     if(sysDrag){
@@ -1533,6 +1540,7 @@ function tempoHalt(){
   tpUI();
 }
 function tempoOnShow(was){
+  selSys=null;sysAct=null;
   if(cur!==was){tp.sys=Math.max(0,firstOn(sysOf(cur),0));tp.frac=0}
   syncLoop();buildTempo();renderSysList();
 }
@@ -1548,18 +1556,87 @@ function tapTempo(){
   let sum=0;for(let i=1;i<taps.length;i++)sum+=taps[i]-taps[i-1];
   setBpm(60000/(sum/(taps.length-1)));toast('Tempo: '+tempo().bpm+' BPM');
 }
+/* --- tempo box selection, move and resize (calibrate mode, or the 🎯 Boxes tool in edit mode) ---
+   A box is stored as page fractions x0,x1,y0,y1. Its sweep time comes only from BPM x beats x measures, and the line
+   position is (x0 + (x1-x0) x progress), so resizing changes the sweep SPEED instantly while the timing stays exact. */
+function hitSys(p){
+  let best=null,ba=9;
+  for(const s of sysOf(cur)){
+    if(p.x>=s.x0&&p.x<=s.x1&&p.y>=s.y0&&p.y<=s.y1){const a=(s.x1-s.x0)*(s.y1-s.y0);if(a<ba){ba=a;best=s}}
+  }
+  return best;
+}
+function drawTempoHandles(ov,nw,nh){
+  const calibOn=document.body.classList.contains('calib'),tb=tool==='tbox'&&document.body.classList.contains('edit');
+  if(!selSys||!(calibOn||tb))return;
+  if(sysOf(cur).indexOf(selSys)<0){selSys=null;return}
+  const s=selSys,hs=(matchMedia('(pointer:coarse)').matches?30:20)/(viewS||1),xm=(s.x0+s.x1)/2,ym=(s.y0+s.y1)/2;
+  const pts={nw:[s.x0,s.y0],n:[xm,s.y0],ne:[s.x1,s.y0],e:[s.x1,ym],se:[s.x1,s.y1],s:[xm,s.y1],sw:[s.x0,s.y1],w:[s.x0,ym]};
+  const cs={nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize'};
+  for(const k of Object.keys(pts)){
+    const h=svgEl('rect',{class:'tbh',x:pts[k][0]*nw-hs/2,y:pts[k][1]*nh-hs/2,width:hs,height:hs,rx:hs*.2,fill:'#fff',stroke:'#d9a400','stroke-width':hs*.15});
+    h.style.cursor=cs[k];
+    h.onpointerdown=e=>{
+      e.stopPropagation();e.preventDefault();
+      sysAct={k:'resize',h:k,s,orig:{x0:s.x0,x1:s.x1,y0:s.y0,y1:s.y1},moved:false};
+      ov.setPointerCapture(e.pointerId);
+    };
+    ov.appendChild(h);
+  }
+}
+function deleteSelSys(){
+  const T=tempo(true),l=T&&T.pages[cur];if(!l||!selSys)return;
+  const i=l.indexOf(selSys);if(i<0)return;
+  l.splice(i,1);if(!l.length)delete T.pages[cur];
+  selSys=null;if(tp.sys>=l.length){tp.sys=0;tp.frac=0}
+  saveMeta();buildTempo();renderMarks();renderSysList();
+}
 function bindCalib(ov){
   const d0=ov.onpointerdown,m0=ov.onpointermove,u0=ov.onpointerup;
   const cl=v=>Math.max(0,Math.min(1,v));
   ov.onpointerdown=e=>{
-    if(document.body.classList.contains('calib')){const p=ptr(e);sysDrag={x0:cl(p.x),y0:cl(p.y),x1:cl(p.x),y1:cl(p.y)};ov.setPointerCapture(e.pointerId);buildTempo();return}
+    const calibOn=document.body.classList.contains('calib'),tb=tool==='tbox'&&document.body.classList.contains('edit');
+    if(calibOn||tb){
+      const p=ptr(e),hit=hitSys(p);
+      if(hit){
+        selSys=hit;sysAct={k:'move',s:hit,sx:p.x,sy:p.y,orig:{x0:hit.x0,x1:hit.x1,y0:hit.y0,y1:hit.y1},moved:false};
+        ov.setPointerCapture(e.pointerId);buildTempo();renderMarks();return;
+      }
+      selSys=null;
+      if(calibOn){sysDrag={x0:cl(p.x),y0:cl(p.y),x1:cl(p.x),y1:cl(p.y)};ov.setPointerCapture(e.pointerId)}
+      buildTempo();renderMarks();return;
+    }
     return d0&&d0.call(ov,e);
   };
   ov.onpointermove=e=>{
+    if(sysAct){
+      const p=ptr(e),a=sysAct,s=a.s,o=a.orig;a.moved=true;
+      if(a.k==='move'){
+        const dx=p.x-a.sx,dy=p.y-a.sy,w=o.x1-o.x0,h=o.y1-o.y0;
+        s.x0=Math.max(0,Math.min(1-w,o.x0+dx));s.x1=s.x0+w;s.y0=Math.max(0,Math.min(1-h,o.y0+dy));s.y1=s.y0+h;
+      }else{
+        const MW=.04,MH=.012;
+        if(a.h.includes('w'))s.x0=Math.max(0,Math.min(o.x1-MW,p.x));
+        if(a.h.includes('e'))s.x1=Math.min(1,Math.max(o.x0+MW,p.x));
+        if(a.h.includes('n'))s.y0=Math.max(0,Math.min(o.y1-MH,p.y));
+        if(a.h.includes('s'))s.y1=Math.min(1,Math.max(o.y0+MH,p.y));
+      }
+      buildTempo();renderMarks();return;
+    }
     if(sysDrag){const p=ptr(e);sysDrag.x1=cl(p.x);sysDrag.y1=cl(p.y);buildTempo();return}
     return m0&&m0.call(ov,e);
   };
   ov.onpointerup=ov.onpointercancel=e=>{
+    if(sysAct){
+      const a=sysAct;sysAct=null;
+      if(a.moved){
+        const list=sysOf(cur),playing=list[tp.sys];
+        list.sort((p,q)=>(p.y0-q.y0)||(p.x0-q.x0));
+        const ni=list.indexOf(playing);if(ni>=0)tp.sys=ni;
+        saveMeta();renderSysList();
+      }
+      buildTempo();renderMarks();return;
+    }
     if(sysDrag){const d=sysDrag;sysDrag=null;addSystem(d);return}
     return u0&&u0.call(ov,e);
   };
@@ -1576,7 +1653,7 @@ function addSystem(d){
 function setCalib(on){
   if(on&&!pages.length)return;
   if(on)setEdit(false);
-  document.body.classList.toggle('calib',on);sysDrag=null;
+  document.body.classList.toggle('calib',on);sysDrag=null;selSys=null;sysAct=null;
   const b=$('tCal');if(b){b.classList.toggle('primary',on);b.textContent=on?'✔ Done':'✎ Calibrate'}
   if(on){tempoPause();toast('Drag a box around each staff row, top to bottom')}
   buildTempo();
@@ -1594,10 +1671,10 @@ function renderSysList(){
   const mk=(t,fn,title)=>{const b=document.createElement('button');b.textContent=t;b.onclick=fn;if(title){b.title=title;b.setAttribute('aria-label',title)}return b};
   sy.forEach((s,i)=>{
     const row=document.createElement('div');row.className='srow2';
-    const lab=document.createElement('span');lab.textContent='System '+(i+1)+' · '+s.m+' measure'+(s.m===1?'':'s')+' · '+sysDur(s).toFixed(1)+' s'+(s.on===false?' · skipped':'');
+    const lab=document.createElement('span');lab.textContent='System '+(i+1)+' · '+s.m+' measure'+(s.m===1?'':'s')+' · '+sysDur(s).toFixed(1)+' s · '+((s.x1-s.x0)*100/sysDur(s)).toFixed(1)+'%/s'+(s.on===false?' · skipped':'');
     const chg=n=>{s.m=Math.max(1,Math.min(64,s.m+n));const T=tempo(true);T.lastM=s.m;saveMeta();renderSysList()};
     row.append(lab,mk('−',()=>chg(-1),'Fewer measures'),mk('+',()=>chg(1),'More measures'),
-      mk('🗑',()=>{const T=tempo(true);T.pages[cur].splice(i,1);if(tp.sys>=T.pages[cur].length){tp.sys=0;tp.frac=0}saveMeta();buildTempo();renderSysList()},'Delete system'));
+      mk('🗑',()=>{const T=tempo(true);if(selSys===T.pages[cur][i])selSys=null;T.pages[cur].splice(i,1);if(tp.sys>=T.pages[cur].length){tp.sys=0;tp.frac=0}saveMeta();buildTempo();renderSysList()},'Delete system'));
     box.appendChild(row);
   });
 }

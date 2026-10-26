@@ -10,7 +10,7 @@ PARTITURA - installable app (PWA)
 
 Files: index.html, manifest.webmanifest, sw.js, icon-192.png, icon-512.png,
 icon-maskable-512.png, apple-touch-icon.png. Keep them together in one folder.
-When you change a file, raise the version number in sw.js (partitura-v22 -> v23).
+When you change a file, raise the version number in sw.js (partitura-v23 -> v24).
 
 BACKUP / SYNC BETWEEN DEVICES (environment backup, format v2)
 Library screen > Export library saves one ZIP (library.json + the PDFs).
@@ -30,3 +30,8 @@ crop, tempo grids and annotations together). Export a library backup before dele
 ZOOM & PAN (edit and calibrate modes)
 Pinch with two fingers or Ctrl + mouse wheel to zoom; drag with two fingers, the Pan tool, Space + drag or
 the middle mouse button to move around. + / - / 0 keys zoom in / out / fit. Zoom resets when you leave edit mode.
+
+TEMPO BOXES (resize / move)
+In Tempo > Calibrate, or in Edit with the "Boxes" tool, click a tempo box to show 8 handles (corners and edge
+midpoints). Drag a handle to resize, drag inside the box to move it, press Delete to remove it. The sweep time of
+a box is always (60 / BPM) x beats x measures; resizing changes the line's speed, not its timing.
