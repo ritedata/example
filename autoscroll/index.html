@@ -62,13 +62,30 @@ body.edit #editbar{display:flex}
 #bar button{padding:7px 8px;font-size:.9rem;border-radius:8px;min-height:38px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;justify-content:center}
 #ind{min-width:56px;text-align:center;color:var(--muted);font-size:.9rem;font-variant-numeric:tabular-nums;white-space:nowrap}
 body.focus #libBtn,body.focus #fit{display:none}
-body.focus #bar{grid-template-columns:1fr auto auto auto auto 1fr}
+body.focus #bar{grid-template-columns:1fr auto auto auto auto auto 1fr}
+@media (max-width:340px){body.focus #ind{display:none}body.focus #bar{grid-template-columns:1fr auto auto auto auto 1fr}}
+#bar #bTmp{min-width:112px}
+.tpb.off{opacity:.6;border-style:dashed}
+body.tvhide.focus #tv .tbx,body.tvhide.focus .tcb{display:none}
+#cropBtn.act,#lightBtn.act,#tempoBtn.act,#editBtn.act{background:#ffd700;border-color:#ffd700;color:#1d1b18;font-weight:700}
+#lightBtn.adj::after{content:'\25cf';color:var(--accent);font-size:.6em;margin-left:5px}
+#mic.alert{background:#ff0000!important;border-color:#ff0000!important;color:#fff!important}
+body:not(.lib) #mic.alert{display:inline-flex}
+#micBanner{display:block;flex:none;width:100%;background:#ff0000;color:#fff;border:0;border-bottom:2px solid #fff;border-radius:0;padding:9px 12px;font-weight:700;font-size:.9rem;text-align:center;cursor:pointer;white-space:normal;line-height:1.25}
+#micBanner[hidden]{display:none}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,0,0,.75)}50%{box-shadow:0 0 0 9px rgba(255,0,0,0)}}
+#mic.alert,#micBanner{animation:micpulse 1.4s infinite}
+.pend{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;margin-top:6px;padding:4px 10px;border-radius:10px;background:#ffd700;color:#1d1b18;border:1px solid #ff9800;white-space:normal;max-width:100%}
+.pend .pt{font-weight:800;font-size:.8rem;line-height:1.2}
+.pend .ps{font-weight:700;font-size:.72rem;line-height:1.2}
+.item.pending .open{border-left:5px solid #ff9800}
 .tpb{display:none}
 body.focus .tpb{display:inline-flex}
 #bar #bPlay{min-width:88px}
 #bar #bReset{min-width:40px}
 #bPlay.playing{background:#2e7d32;border-color:#2e7d32;color:#fff;font-weight:600}
-@media (max-width:520px){body.focus #bar #exitFit .lbl,.tpb .lbl{display:none}#bar #bPlay{min-width:40px}}
+@media (max-width:640px){body.focus #bar #exitFit .lbl,.tpb .lbl{display:none}#bar #bPlay,#bar #bTmp{min-width:40px}}
+@media (max-width:700px){body.focus #prev .lbl,body.focus #next .lbl{display:none}}
 @media (max-width:420px){#bar{gap:5px;padding:5px 8px}#bar button{font-size:.82rem;padding:7px 5px}#ind{min-width:48px;font-size:.82rem}}
 #bar #libBtn,#bar #fit,#bar #exitFit{min-width:40px}
 @media (max-width:400px){#prev .lbl,#next .lbl{display:none}}
@@ -184,6 +201,7 @@ body.edit #ov .snh{pointer-events:auto;cursor:nwse-resize}
   <button id="setBtn" title="Microphone sensitivity, volume and page-turn beep">⚙ Audio</button>
 </header>
 
+<button id="micBanner" hidden aria-live="assertive"></button>
 <div id="view"></div>
 
 <div id="tempobar">
@@ -237,6 +255,7 @@ body.edit #ov .snh{pointer-events:auto;cursor:nwse-resize}
   <button id="exitFit" title="Back to main screen" aria-label="Menu">☰<span class="lbl"> Menu</span></button>
   <button id="bPlay" class="tpb" aria-label="Play tempo line" aria-pressed="false" title="Play: start the tempo line (P)"><span class="ic">▶</span><span class="lbl"> Play</span></button>
   <button id="bReset" class="tpb" aria-label="Reset: back to System 1 of this page" title="Reset: back to System 1 of this page (R)"><span class="ic">⟲</span><span class="lbl"> Reset</span></button>
+  <button id="bTmp" class="tpb" aria-label="Hide tempo boxes" aria-pressed="false" title="Show / hide the tempo boxes on the sheet"><span class="ic">◉</span><span class="lbl"> Hide tempos</span></button>
   <span id="ind">–</span>
   <button id="fit" title="Hide all controls except Previous / Next (Esc or double-tap to restore)" aria-label="Fit">⤢<span class="lbl"> Fit</span></button>
   <button id="next" class="nav primary" disabled aria-label="Next page"><span class="lbl">Next </span>▶</button>
@@ -397,8 +416,18 @@ async function showLibrary(){
       const b=document.createElement('b');b.textContent=(m.pinned?'📌 ':'')+m.title;o.appendChild(b);
       if(m.author){const au=document.createElement('em');au.textContent=m.author;o.appendChild(au)}
       const s=document.createElement('span');
-      s.textContent=(m.numPages||'?')+' pages'+(m.page>0?' · last on page '+(m.page+1):'')+(m.youtube?' · ▶ YouTube':'');
-      o.appendChild(s);o.onclick=()=>openDoc(m);
+      s.textContent=(m.numPages||'?')+' pages'+(m.youtube?' · ▶ YouTube':'');
+      const pe=pendingEdits(m);
+      if(pe.any){
+        row.classList.add('pending');
+        const pb=document.createElement('div');pb.className='pend';pb.setAttribute('role','status');
+        const t1=document.createElement('div');t1.className='pt';t1.textContent='⚠ Pending Flatten';
+        const t2=document.createElement('div');t2.className='ps';t2.textContent=[pe.n?pe.n+' edit'+(pe.n===1?'':'s'):'',pe.crop?'crop':''].filter(Boolean).join(' + ');
+        pb.append(t1,t2);
+        pb.title='Unsaved edits (markups, erasures, snippets and/or a crop). Open this PDF, tap Edit, then Save to flatten them into the PDF.';
+        o.appendChild(s);o.appendChild(pb);
+      }else o.appendChild(s);
+      o.onclick=()=>{m.page=0;openDoc(m)};
       const acts=document.createElement('div');acts.className='acts';
       const save=async()=>{m.updated=Date.now();try{await dbMeta({...m,crop:{...m.crop}})}catch(e){}showLibrary()};
       const pin=document.createElement('button');pin.textContent='📌';pin.title=m.pinned?'Unpin':'Pin to top';pin.setAttribute('aria-label',pin.title+': '+m.title);
@@ -1465,8 +1494,8 @@ function buildTempo(){
   if(sy.length||calib||panel){
     sy.forEach((s,i)=>{
       const isSel=selSys===s;
-      tv.appendChild(svgEl('rect',{x:s.x0*nw,y:s.y0*nh,width:(s.x1-s.x0)*nw,height:(s.y1-s.y0)*nh,fill:s.on===false?'#888':'#ffd600','fill-opacity':s.on===false?.14:(isSel?.2:(calib?.12:(panel?.06:.04))),stroke:isSel?'#e8794a':(s.on===false?'#777':'#d9a400'),'stroke-opacity':(calib||panel||isSel)?1:.5,'stroke-width':(isSel?2.5:1.5)*S,'stroke-dasharray':isSel?'none':(6*S)+' '+(4*S)}));
-      const t=svgEl('text',{x:s.x0*nw+4*S,y:s.y0*nh+14*S,'font-size':13*S,'font-family':'system-ui,sans-serif','font-weight':'700',fill:'#8a6a00'});t.textContent=String(i+1);if(calib||panel)tv.appendChild(t);
+      tv.appendChild(svgEl('rect',{class:'tbx',x:s.x0*nw,y:s.y0*nh,width:(s.x1-s.x0)*nw,height:(s.y1-s.y0)*nh,fill:s.on===false?'#888':'#ffd600','fill-opacity':s.on===false?.14:(isSel?.2:(calib?.12:(panel?.06:.04))),stroke:isSel?'#e8794a':(s.on===false?'#777':'#d9a400'),'stroke-opacity':(calib||panel||isSel)?1:.5,'stroke-width':(isSel?2.5:1.5)*S,'stroke-dasharray':isSel?'none':(6*S)+' '+(4*S)}));
+      const t=svgEl('text',{class:'tbx',x:s.x0*nw+4*S,y:s.y0*nh+14*S,'font-size':13*S,'font-family':'system-ui,sans-serif','font-weight':'700',fill:'#8a6a00'});t.textContent=String(i+1);if(calib||panel)tv.appendChild(t);
     });
     if(sysDrag){
       const a=Math.min(sysDrag.x0,sysDrag.x1),b=Math.max(sysDrag.x0,sysDrag.x1),c=Math.min(sysDrag.y0,sysDrag.y1),d=Math.max(sysDrag.y0,sysDrag.y1);
@@ -1760,6 +1789,41 @@ $('tempoBtn').onclick=()=>{
 if(window.ResizeObserver)new ResizeObserver(()=>{try{layout();setBarH()}catch(e){}}).observe(view);
 tpUI();
 
+/* ---------- Fit mode: show / hide tempo boxes ---------- */
+let tvHide=lsGet('tvis','1')==='0';
+function tvUI(){
+  document.body.classList.toggle('tvhide',tvHide);
+  const b=$('bTmp');if(!b)return;
+  b.classList.toggle('off',tvHide);b.setAttribute('aria-pressed',tvHide?'true':'false');
+  b.setAttribute('aria-label',tvHide?'Show tempo boxes':'Hide tempo boxes');
+  b.title=tvHide?'Show the tempo boxes on the sheet':'Hide the tempo boxes: clean sheet';
+  b.querySelector('.ic').textContent=tvHide?'○':'◉';b.querySelector('.lbl').textContent=tvHide?' Show tempos':' Hide tempos';
+}
+$('bTmp').onclick=()=>{tvHide=!tvHide;lsSet('tvis',tvHide?'0':'1');tvUI();toast(tvHide?'Tempo boxes hidden':'Tempo boxes shown')};
+tvUI();
+
+/* ---------- unsaved (unflattened) edits: shown as a badge on the library card ---------- */
+function pendingEdits(m){
+  let n=0;const marks=m.marks||{};
+  for(const k of Object.keys(marks))for(const x of (marks[k]||[]))if(validMark(x))n++;
+  const c=m.crop||{},crop=!!(c.l||c.r||c.t||c.b);
+  return{n,crop,any:n>0||crop};
+}
+
+/* ---------- yellow highlight while a toolbar tool is open / active ---------- */
+function syncActive(){
+  const on=(id,v)=>{const e=$(id);if(e)e.classList.toggle('act',!!v)};
+  on('cropBtn',$('cropbar').classList.contains('open'));
+  on('lightBtn',$('lightbar').classList.contains('open'));
+  on('tempoBtn',$('tempobar').classList.contains('open')||document.body.classList.contains('calib'));
+  on('editBtn',document.body.classList.contains('edit'));
+}
+if(window.MutationObserver){
+  const mo=new MutationObserver(syncActive);
+  for(const el of [document.body,$('cropbar'),$('lightbar'),$('tempobar')])mo.observe(el,{attributes:true,attributeFilter:['class']});
+}
+syncActive();
+
 /* ---------- brightness / contrast: a CSS filter on the page layer only (view-only; PDF data is never touched) ---------- */
 let bri=+lsGet('bri',100),con=+lsGet('con',100);
 if(!isFinite(bri))bri=100;if(!isFinite(con))con=100;
@@ -1769,7 +1833,7 @@ function applyLight(){
   r.setProperty('--bri',bri/100);r.setProperty('--con',con/100);
   $('briV').textContent=bri+'%';$('conV').textContent=con+'%';
   $('bri').value=bri;$('con').value=con;
-  $('lightBtn').classList.toggle('primary',bri!==100||con!==100);
+  $('lightBtn').classList.toggle('adj',bri!==100||con!==100);
 }
 $('bri').oninput=e=>{bri=+e.target.value;lsSet('bri',bri);applyLight()};
 $('con').oninput=e=>{con=+e.target.value;lsSet('con',con);applyLight()};
@@ -1817,9 +1881,27 @@ $('sMic').onclick=()=>{wantOn?stopVoice():startVoice();setTimeout(syncAudioUI,15
 
 /* ---------- voice commands ---------- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let rec=null,wantOn=false,lastCmd=0,tt=null;
+let rec=null,wantOn=false,lastCmd=0,tt=null,micAlert=false,micWhy='',micQuick=0,micStartedAt=0,permWatch=false;
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('show'),2200)}
-function micState(){$('mic').classList.toggle('primary',wantOn);$('mic').textContent=wantOn?'🎤 On':'🎤';updateNav()}
+function micState(){
+  const m=$('mic');m.classList.toggle('primary',wantOn&&!micAlert);m.classList.toggle('alert',micAlert);
+  m.textContent=micAlert?'🎤 Lost':(wantOn?'🎤 On':'🎤');
+  m.setAttribute('aria-label',micAlert?'Microphone lost. Tap to retry voice commands':(wantOn?'Voice commands on':'Voice commands'));
+  const bn=$('micBanner');bn.hidden=!micAlert;if(micAlert)bn.textContent='🎤 Voice lost: '+(micWhy||'microphone unavailable')+'. Tap to retry';
+  updateNav();
+}
+/* Voice was switched ON and the microphone then dropped (permission revoked, input unplugged, recognition crashed):
+   stop retrying, turn the mic icon and a banner bright red, and keep them red until listening is restored or voice is switched off. */
+function micLost(why,hint){
+  wantOn=false;micAlert=true;micWhy=why;
+  try{rec&&rec.stop()}catch(_){}
+  micState();toast('Voice commands stopped: '+why+(hint?' ('+hint+')':''));
+}
+function watchMicPermission(){
+  if(permWatch||!navigator.permissions||!navigator.permissions.query)return;
+  permWatch=true;
+  try{navigator.permissions.query({name:'microphone'}).then(ps=>{ps.onchange=()=>{if(wantOn&&ps.state==='denied')micLost('permission revoked')}}).catch(()=>{permWatch=false})}catch(e){permWatch=false}
+}
 const NUM={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
 function parseNum(s){s=s.trim();if(/^\d+$/.test(s))return +s;const p=s.split(/[\s-]+/);let t=0;for(const w of p){if(!(w in NUM))return null;t+=NUM[w]}return t}
 function parseCommand(txt){
@@ -1883,16 +1965,28 @@ function startVoice(){
       if(!done)heard(r[0].transcript,r[0].confidence||0,'not a command');
     }
   };
+  rec.onstart=()=>{micStartedAt=Date.now();if(micAlert){micAlert=false;micWhy='';micState()}};
   rec.onerror=e=>{
-    if(e.error==='not-allowed'||e.error==='service-not-allowed'){wantOn=false;micState();toast('Microphone blocked. Allow mic access, or open the app in its own browser tab.')}
-    else if(e.error==='audio-capture'){wantOn=false;micState();toast('No microphone found.')}
-    else if(e.error==='network'){wantOn=false;micState();toast('Voice commands need an internet connection.')}
+    const er=e&&e.error;
+    if(er==='no-speech'||er==='aborted')return;
+    if(er==='not-allowed'||er==='service-not-allowed')micLost('blocked or permission revoked','allow microphone access, or open the app in its own browser tab');
+    else if(er==='audio-capture')micLost('microphone not available');
+    else if(er==='network')micLost('no internet connection');
+    else micLost('microphone error ('+er+')');
   };
-  rec.onend=()=>{if(wantOn)setTimeout(()=>{if(wantOn){try{rec.start()}catch(_){}}},300)};
-  wantOn=true;micState();
-  try{rec.start();toast('Listening… say “go” or “back”')}catch(err){wantOn=false;micState()}
+  rec.onend=()=>{
+    if(!wantOn)return;
+    micQuick=(Date.now()-micStartedAt<800)?micQuick+1:0;
+    if(micQuick>=4){micLost('input keeps stopping');return}
+    setTimeout(()=>{if(!wantOn)return;try{micStartedAt=Date.now();rec.start()}catch(_){micLost('could not restart the microphone')}},300);
+  };
+  micAlert=false;micWhy='';micQuick=0;micStartedAt=Date.now();
+  wantOn=true;micState();watchMicPermission();
+  try{rec.start();toast('Listening… say “go” or “back”')}catch(err){micLost('could not start the microphone')}
 }
-function stopVoice(){wantOn=false;micState();try{rec&&rec.stop()}catch(_){}}
+function stopVoice(){wantOn=false;micAlert=false;micWhy='';micState();try{rec&&rec.stop()}catch(_){}}
+$('micBanner').onclick=()=>startVoice();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&micAlert)startVoice()});
 $('mic').onclick=()=>wantOn?stopVoice():startVoice();
 
 initDB().then(showLibrary);

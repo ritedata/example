@@ -10,7 +10,7 @@ PARTITURA - installable app (PWA)
 
 Files: index.html, manifest.webmanifest, sw.js, icon-192.png, icon-512.png,
 icon-maskable-512.png, apple-touch-icon.png. Keep them together in one folder.
-When you change a file, raise the version number in sw.js (partitura-v24 -> v25).
+When you change a file, raise the version number in sw.js (partitura-v25 -> v26).
 
 BACKUP / SYNC BETWEEN DEVICES (environment backup, format v2)
 Library screen > Export library saves one ZIP (library.json + the PDFs).
@@ -39,3 +39,10 @@ a box is always (60 / BPM) x beats x measures; resizing changes the line's speed
 FIT MODE PLAYBACK
 In Fit mode the bottom bar shows  Prev | Menu | Play/Pause | Reset | page | Next.
 Play starts the tempo line, Pause freezes it where it is, Reset returns it to System 1 of the current page.
+
+OPENING, ALERTS AND BADGES
+- Opening a sheet from the library always starts on page 1.
+- If the microphone drops while voice is on, the mic icon and a strip across the top turn bright red; tap to retry.
+- Crop / Light / Tempo / Edit turn yellow while their tool is open.
+- A yellow "Pending Flatten" badge on a library card means unsaved edits or a crop; Edit > Save clears it.
+- Fit mode has a Hide/Show tempos toggle for a clean sheet (the scanning line keeps running).
